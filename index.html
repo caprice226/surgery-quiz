@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>外科專科考題練習</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ===== 起始畫面 ===== -->
+  <div id="start-screen" class="screen">
+    <div class="card start-card">
+      <h1>外科專科考題練習</h1>
+      <p class="subtitle">共 <span id="total-count">0</span> 題，涵蓋 <span id="spec-count">0</span> 個科別</p>
+
+      <div class="filter-section">
+        <label>選擇科別</label>
+        <div id="specialty-list" class="chip-group"></div>
+      </div>
+
+      <div class="filter-section">
+        <label>題型</label>
+        <div class="chip-group">
+          <button class="chip active" data-type="all">全部</button>
+          <button class="chip" data-type="單選題">單選題</button>
+          <button class="chip" data-type="複選題">複選題</button>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <label>題數上限</label>
+        <div class="range-row">
+          <input type="range" id="question-limit" min="5" max="100" value="25" step="5">
+          <span id="limit-display">25</span> 題
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <label>
+          <input type="checkbox" id="shuffle-toggle" checked> 隨機排序
+        </label>
+      </div>
+
+      <button id="start-btn" class="btn-primary" disabled>開始作答</button>
+      <p id="selected-info" class="info-text">請至少選擇一個科別</p>
+    </div>
+  </div>
+
+  <!-- ===== 答題畫面 ===== -->
+  <div id="quiz-screen" class="screen hidden">
+    <div class="topbar">
+      <div class="progress-info">
+        <span id="progress-text">1 / 25</span>
+        <span id="score-text">正確 0 / 已答 0</span>
+      </div>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+
+    <div class="card quiz-card">
+      <div class="question-meta">
+        <span class="badge" id="q-specialty"></span>
+        <span class="badge" id="q-type"></span>
+        <span class="badge dim" id="q-number"></span>
+        <span class="badge dim" id="q-source"></span>
+      </div>
+
+      <div id="question-images" class="question-images"></div>
+
+      <p id="question-text" class="question-text"></p>
+
+      <div id="options-container" class="options-container"></div>
+
+      <div id="answer-feedback" class="feedback hidden"></div>
+
+      <div class="button-row">
+        <button id="submit-btn" class="btn-primary" disabled>確認答案</button>
+        <button id="next-btn" class="btn-primary hidden">下一題</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 結算畫面 ===== -->
+  <div id="result-screen" class="screen hidden">
+    <div class="card result-card">
+      <h2>測驗結果</h2>
+      <div class="score-circle">
+        <span id="final-score">0%</span>
+      </div>
+      <p id="result-summary"></p>
+
+      <div id="result-details" class="result-details"></div>
+
+      <div class="button-row">
+        <button id="review-btn" class="btn-secondary">查看錯題</button>
+        <button id="restart-btn" class="btn-primary">重新開始</button>
+      </div>
+    </div>
+
+    <div id="review-section" class="hidden">
+      <h3>錯題回顧</h3>
+      <div id="review-container"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
