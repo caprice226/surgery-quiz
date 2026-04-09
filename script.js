@@ -12,7 +12,8 @@
   let currentIndex = 0;
   let correctCount = 0;
   let answeredCount = 0;
-  let userAnswers = []; // [{selected: [...], correct: bool}]
+  let userAnswers = []; // [{selected: [...], correct: bool, score, ...}]
+  let totalScore = 0;
 
   // 篩選狀態
   let selectedSpecs = new Set();
@@ -146,6 +147,7 @@
     correctCount = 0;
     answeredCount = 0;
     userAnswers = [];
+    totalScore = 0;
 
     startScreen.classList.add("hidden");
     quizScreen.classList.remove("hidden");
@@ -238,6 +240,34 @@
     $("#submit-btn").disabled = $$(".option-btn.selected").length === 0;
   }
 
+  // ---------- 計分輔助 ----------
+  function calcQuestionScore(q, selectedLabels, correctLabels) {
+    const perQ = 100 / quizQuestions.length;
+    const isMultiple = q.question_type === "複選題";
+
+    if (selectedLabels.length === 0) return { score: 0, k: isMultiple ? 5 : null };
+
+    if (!isMultiple) {
+      // 單選題
+      const isCorrect =
+        selectedLabels.length === correctLabels.length &&
+        selectedLabels.every((l, i) => l === correctLabels[i]);
+      return { score: isCorrect ? perQ : 0, k: null };
+    }
+
+    // 複選題：固定 5 個選項 A-E
+    const allLabels = ["A", "B", "C", "D", "E"];
+    let k = 0;
+    allLabels.forEach((label) => {
+      const userSelected = selectedLabels.includes(label);
+      const isAnswer = correctLabels.includes(label);
+      if (userSelected !== isAnswer) k++;
+    });
+
+    const ratio = Math.max(0, (5 - 2 * k) / 5);
+    return { score: perQ * ratio, k };
+  }
+
   // ---------- 提交答案 ----------
   function submitAnswer(q) {
     const selectedBtns = $$(".option-btn.selected");
@@ -248,14 +278,20 @@
       selectedLabels.length === correctLabels.length &&
       selectedLabels.every((l, i) => l === correctLabels[i]);
 
+    const { score, k } = calcQuestionScore(q, selectedLabels, correctLabels);
+    const roundedScore = Math.round(score * 100) / 100;
+
     answeredCount++;
     if (isCorrect) correctCount++;
+    totalScore += roundedScore;
 
     userAnswers.push({
       question: q,
       selected: selectedLabels,
       correctLabels,
       isCorrect,
+      score: roundedScore,
+      k,
     });
 
     // Lock & highlight
@@ -306,17 +342,20 @@
     quizScreen.classList.add("hidden");
     resultScreen.classList.remove("hidden");
 
-    const pct = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
-    $("#final-score").textContent = pct + "%";
-    $("#result-summary").textContent = `共 ${answeredCount} 題，答對 ${correctCount} 題，答錯 ${answeredCount - correctCount} 題`;
+    const finalScore = Math.round(totalScore * 100) / 100;
+    const perQ = Math.round((100 / quizQuestions.length) * 100) / 100;
+
+    $("#final-score").textContent = finalScore.toFixed(2);
+    $("#result-summary").textContent = `共 ${answeredCount} 題｜每題滿分 ${perQ.toFixed(2)} 分｜總分 ${finalScore.toFixed(2)} / 100`;
 
     // Stats by specialty
     const specStats = {};
     userAnswers.forEach((a) => {
       const s = a.question.specialty;
-      if (!specStats[s]) specStats[s] = { total: 0, correct: 0 };
+      if (!specStats[s]) specStats[s] = { total: 0, correct: 0, score: 0 };
       specStats[s].total++;
       if (a.isCorrect) specStats[s].correct++;
+      specStats[s].score += a.score;
     });
 
     const detailDiv = $("#result-details");
@@ -327,9 +366,13 @@
         const box = document.createElement("div");
         box.className = "stat-box";
         const rate = Math.round((st.correct / st.total) * 100);
-        box.innerHTML = `<div class="stat-num">${rate}%</div><div class="stat-label">${spec}<br>${st.correct}/${st.total}</div>`;
+        const specScore = Math.round(st.score * 100) / 100;
+        box.innerHTML = `<div class="stat-num">${rate}%</div><div class="stat-label">${spec}<br>${st.correct}/${st.total}｜${specScore.toFixed(2)} 分</div>`;
         detailDiv.appendChild(box);
       });
+
+    // Per-question score table
+    renderScoreTable();
 
     // Review
     const reviewBtn = $("#review-btn");
@@ -346,6 +389,39 @@
       startScreen.classList.remove("hidden");
       reviewSection.classList.add("hidden");
     };
+  }
+
+  // ---------- 每題得分明細表 ----------
+  function renderScoreTable() {
+    const container = $("#score-table-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const perQ = Math.round((100 / quizQuestions.length) * 100) / 100;
+
+    let html = `<table class="score-table"><thead><tr>
+      <th>#</th><th>科別</th><th>題型</th><th>滿分</th><th>得分</th>
+      <th>正確答案</th><th>你的答案</th><th>k 值</th>
+    </tr></thead><tbody>`;
+
+    userAnswers.forEach((a, i) => {
+      const q = a.question;
+      const rowClass = a.isCorrect ? "" : "row-wrong";
+      const kDisplay = a.k !== null ? a.k : "—";
+      html += `<tr class="${rowClass}">
+        <td>${i + 1}</td>
+        <td>${escapeHtml(q.specialty)}</td>
+        <td>${q.question_type}</td>
+        <td>${perQ.toFixed(2)}</td>
+        <td>${a.score.toFixed(2)}</td>
+        <td>${a.correctLabels.join("")}</td>
+        <td>${a.selected.length > 0 ? a.selected.join("") : "未作答"}</td>
+        <td>${kDisplay}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
   }
 
   function renderReview() {
@@ -388,7 +464,7 @@
           else if (isWrong) cls = "your-ans";
           return `<p class="review-answer ${cls}">${o.label}. ${escapeHtml(o.text)} ${isCorrect ? " ✓" : ""}${isWrong ? " ✗" : ""}</p>`;
         }).join("")}
-        <p class="review-answer correct-ans" style="margin-top:8px;">正確答案：${a.correctLabels.join("")}　｜　你的答案：${a.selected.join("")}</p>
+        <p class="review-answer correct-ans" style="margin-top:8px;">正確答案：${a.correctLabels.join("")}　｜　你的答案：${a.selected.join("")}　｜　得分：${a.score.toFixed(2)}${a.k !== null ? "　｜　k=" + a.k : ""}</p>
       `;
       container.appendChild(div);
     });
