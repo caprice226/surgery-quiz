@@ -123,15 +123,30 @@
     const filtered = getFilteredQuestions();
     const info = $("#selected-info");
     const btn = $("#start-btn");
+    const slider = $("#question-limit");
+    const limitDisp = $("#limit-display");
 
     if (selectedSpecs.size === 0) {
       info.textContent = "請至少選擇一個科別";
       btn.disabled = true;
     } else {
-      const limit = parseInt($("#question-limit").value);
-      const actual = Math.min(limit, filtered.length);
-      info.textContent = `已選 ${selectedSpecs.size} 科，共 ${filtered.length} 題可用，本次作答 ${actual} 題`;
-      btn.disabled = filtered.length === 0;
+      let limit = parseInt(slider.value);
+      const available = filtered.length;
+      // 可用題數向下取整到 5 的倍數（至少 5）
+      const maxAllowed = Math.max(5, Math.floor(available / 5) * 5);
+
+      if (limit > available) {
+        // 自動調整 slider 到可用最大題數（取 5 的倍數）
+        const adjusted = Math.min(limit, maxAllowed);
+        slider.value = adjusted;
+        limitDisp.textContent = adjusted;
+        limit = adjusted;
+        info.textContent = `目前條件下可用題數不足，已自動調整為 ${Math.min(adjusted, available)} 題（共 ${available} 題可用）`;
+      } else {
+        const actual = Math.min(limit, available);
+        info.textContent = `已選 ${selectedSpecs.size} 科，共 ${available} 題可用，本次作答 ${actual} 題`;
+      }
+      btn.disabled = available === 0;
     }
   }
 
