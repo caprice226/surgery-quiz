@@ -211,6 +211,78 @@ body {
 .review-item .review-answer.correct-ans { color: var(--success); font-weight: 600; }
 .review-item .review-answer.your-ans { color: var(--danger); }
 
+/* ===== AI Explain ===== */
+.ai-explain-wrap { margin-top: 12px; }
+
+.btn-ai-explain {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: .85rem;
+  font-weight: 600;
+  border: 1.5px solid var(--primary);
+  background: var(--card);
+  color: var(--primary);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-ai-explain:hover:not(:disabled) { background: #ecfdf5; }
+.btn-ai-explain:disabled { opacity: .5; cursor: wait; }
+
+.ai-explain-content {
+  margin-top: 10px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary);
+  font-size: .88rem;
+  line-height: 1.7;
+}
+
+.ai-explain-body strong { color: var(--primary); }
+
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-light);
+  font-size: .85rem;
+}
+
+.ai-spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ai-explain-warning {
+  color: #92400e;
+  background: #fef3c7;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+.ai-explain-warning code {
+  background: #fde68a;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: .82rem;
+}
+
+.ai-explain-error {
+  color: #b91c1c;
+  background: #fee2e2;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
 /* ===== Score Table ===== */
 .score-table-wrap { margin-top: 20px; overflow-x: auto; text-align: left; }
 .score-table {

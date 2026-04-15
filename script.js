@@ -6,6 +6,11 @@
   const JSON_PATH = "questions.json";
   const IMAGE_BASE = "";
 
+  // ---------- Gemini API 設定 ----------
+  // 請在此填入你的 Gemini API Key（取得方式見 README.md）
+  const GEMINI_API_KEY = "AIzaSyAffGqBeba5FnK2MOkxHg7LLb6R-N4QQtI";
+  const GEMINI_MODEL = "gemini-2.0-flash";
+
   // ---------- 全域狀態 ----------
   let allQuestions = [];
   let quizQuestions = [];
@@ -450,7 +455,7 @@
       return;
     }
 
-    wrongOnes.forEach((a) => {
+    wrongOnes.forEach((a, idx) => {
       const q = a.question;
       const div = document.createElement("div");
       div.className = "review-item";
@@ -480,9 +485,110 @@
           return `<p class="review-answer ${cls}">${o.label}. ${escapeHtml(o.text)} ${isCorrect ? " ✓" : ""}${isWrong ? " ✗" : ""}</p>`;
         }).join("")}
         <p class="review-answer correct-ans" style="margin-top:8px;">正確答案：${a.correctLabels.join("")}　｜　你的答案：${a.selected.join("")}　｜　得分：${a.score.toFixed(2)}${a.k !== null ? "　｜　k=" + a.k : ""}</p>
+        <div class="ai-explain-wrap">
+          <button class="btn-ai-explain" data-idx="${idx}">AI 詳解</button>
+          <div class="ai-explain-content hidden" id="ai-explain-${idx}"></div>
+        </div>
       `;
       container.appendChild(div);
     });
+
+    // 綁定 AI 詳解按鈕事件
+    container.querySelectorAll(".btn-ai-explain").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx);
+        const contentDiv = container.querySelector(`#ai-explain-${idx}`);
+        // 已經生成過 → 展開/收合
+        if (contentDiv.dataset.loaded === "true") {
+          contentDiv.classList.toggle("hidden");
+          btn.textContent = contentDiv.classList.contains("hidden") ? "AI 詳解" : "收合詳解";
+          return;
+        }
+        // 尚未生成 → 呼叫 API
+        const wrongIdx = idx;
+        const a = wrongOnes[wrongIdx];
+        fetchAIExplanation(a, btn, contentDiv);
+      });
+    });
+  }
+
+  // ---------- Gemini AI 詳解 ----------
+  async function fetchAIExplanation(a, btn, contentDiv) {
+    // 檢查 API Key
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === "") {
+      contentDiv.classList.remove("hidden");
+      contentDiv.innerHTML = `<p class="ai-explain-warning">尚未設定 Gemini API Key。請開啟 <code>script.js</code>，在檔案最上方找到 <code>GEMINI_API_KEY</code> 變數，填入你的 API Key。<br>取得方式請參閱 README.md。</p>`;
+      contentDiv.dataset.loaded = "true";
+      btn.textContent = "收合詳解";
+      return;
+    }
+
+    const q = a.question;
+    const text = q.question_text.replace(/!\[[^\]]*\]\([^)]+\)/g, "").trim();
+    const optionsText = q.options.map((o) => `${o.label}. ${o.text}`).join("\n");
+    const hasImage = q.image_paths && q.image_paths.length > 0;
+
+    const prompt = `你是一位外科專科考試的教學助教。請針對以下錯題提供詳細解析，使用繁體中文回答。
+
+【科別】${q.specialty}
+【題型】${q.question_type}
+【題目】${text}
+【選項】
+${optionsText}
+【正確答案】${a.correctLabels.join("")}
+【使用者作答】${a.selected.join("") || "未作答"}
+${hasImage ? "【備註】本題含有附圖，請依題目文字描述進行解析。" : ""}
+
+請依照以下結構回答：
+1. **為什麼正解正確**：說明正確答案的醫學依據
+2. **為什麼我選錯**：分析使用者選擇的答案為何不對
+3. **其他選項為何不適合**：逐一說明其餘選項的問題
+4. **核心觀念**：歸納這題考的關鍵知識點
+
+請簡潔但完整，適合考前複習使用。`;
+
+    // 載入中狀態
+    btn.disabled = true;
+    btn.textContent = "生成中…";
+    contentDiv.classList.remove("hidden");
+    contentDiv.innerHTML = `<div class="ai-loading"><span class="ai-spinner"></span> 正在向 Gemini 請求解析…</div>`;
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+        throw new Error(errMsg);
+      }
+
+      const data = await res.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "（未收到回應內容）";
+
+      // 簡易 Markdown → HTML（粗體、換行）
+      const html = escapeHtml(reply)
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n/g, "<br>");
+
+      contentDiv.innerHTML = `<div class="ai-explain-body">${html}</div>`;
+      contentDiv.dataset.loaded = "true";
+      btn.disabled = false;
+      btn.textContent = "收合詳解";
+    } catch (err) {
+      contentDiv.innerHTML = `<p class="ai-explain-error">解析請求失敗：${escapeHtml(err.message)}<br>請確認 API Key 是否正確，以及網路連線是否正常。</p>`;
+      btn.disabled = false;
+      btn.textContent = "重試 AI 詳解";
+      // 允許重試：不標記為 loaded
+      contentDiv.dataset.loaded = "";
+    }
   }
 
   // ---------- Helpers ----------
