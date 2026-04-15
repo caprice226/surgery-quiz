@@ -8,7 +8,7 @@
 
   // ---------- Gemini API 設定 ----------
   // 請在此填入你的 Gemini API Key（取得方式見 README.md）
-  const GEMINI_API_KEY = "AIzaSyAffGqBeba5FnK2MOkxHg7LLb6R-N4QQtI";
+  const GEMINI_API_KEY = "AIzaSyCqucJI-aw2chfOpZUrgJnB45kSzIjizGQ";
   const GEMINI_MODEL = "gemini-2.0-flash";
 
   // ---------- 全域狀態 ----------
