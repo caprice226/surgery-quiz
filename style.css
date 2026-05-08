@@ -318,6 +318,35 @@ body {
 }
 .score-table .row-unanswered { background: #fefce8; }
 
+/* ===== Name Input ===== */
+.name-input-row { display: flex; gap: 8px; }
+.name-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: .95rem;
+  font-family: inherit;
+  transition: border-color .15s;
+  outline: none;
+}
+.name-input:focus { border-color: var(--primary); }
+
+/* ===== Leaderboard ===== */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+  margin-bottom: 8px;
+}
+.leaderboard-table th, .leaderboard-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.leaderboard-table th { background: var(--bg); font-weight: 600; }
+.leaderboard-table .lb-me { background: #d1fae5; font-weight: 600; }
+
 /* ===== Footer ===== */
 .site-footer {
   text-align: center;

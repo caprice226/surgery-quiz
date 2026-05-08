@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>外科專科考題練習</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
   <!-- ===== 起始畫面 ===== -->
@@ -32,8 +33,17 @@
         <div class="chip-group">
           <button class="chip active" data-mode="practice" id="mode-practice">練習模式</button>
           <button class="chip" data-mode="exam" id="mode-exam">考試模式</button>
+          <button class="chip" data-mode="standard-exam" id="mode-standard-exam">標準考試模式</button>
         </div>
-        <p id="exam-mode-hint" class="info-text hidden" style="margin-top:6px;color:#b45309;">考試模式：隨機抽 100 題（80 單選 + 20 複選），含倒扣計分</p>
+        <p id="exam-mode-hint" class="info-text hidden" style="margin-top:6px;color:#b45309;"></p>
+      </div>
+
+      <div id="exam-name-section" class="filter-section hidden">
+        <label>考生姓名（排行榜顯示用）</label>
+        <div class="name-input-row">
+          <input type="text" id="exam-player-name" class="name-input" placeholder="請輸入姓名（最多 20 字）" maxlength="20" autocomplete="off">
+        </div>
+        <p id="name-error" class="info-text hidden" style="color:#dc2626;"></p>
       </div>
 
       <div id="practice-options">
@@ -106,6 +116,13 @@
       <div id="result-details" class="result-details"></div>
 
       <div id="score-table-container" class="score-table-wrap"></div>
+
+      <div id="leaderboard-section" class="hidden">
+        <h3 style="margin-top:24px;margin-bottom:4px;">排行榜 Top 10</h3>
+        <p class="info-text" style="margin-top:0;margin-bottom:12px;">排行榜僅計入標準全科考試模式成績</p>
+        <div id="leaderboard-status"></div>
+        <div id="leaderboard-container"></div>
+      </div>
 
       <div class="button-row">
         <button id="review-btn" class="btn-secondary">查看錯題</button>

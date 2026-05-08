@@ -6,6 +6,16 @@
   const JSON_PATH = "questions.json";
   const IMAGE_BASE = "";
 
+  // ---------- Supabase 設定 ----------
+  // 請在此填入你的 Supabase 專案公開參數（取得方式見 README.md）
+  const SUPABASE_URL = "https://qtwnwwjunagsoupssefy.supabase.co";   // 例: "https://xxxxx.supabase.co"
+  const SUPABASE_ANON_KEY = "sb_publishable_N1mdyM7D81UGtn17GCtnaQ_Q-jvd2BY"; // 公開的 anon key，不要放 service role key
+
+  let supabase = null;
+  if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
   // ---------- Gemini API 設定 ----------
   // 請在此填入你的 Gemini API Key（取得方式見 README.md）
   const GEMINI_API_KEY = "AIzaSyCqucJI-aw2chfOpZUrgJnB45kSzIjizGQ";
@@ -23,7 +33,11 @@
   // 篩選狀態
   let selectedSpecs = new Set();
   let selectedType = "all";
-  let quizMode = "practice"; // "practice" | "exam"
+  let quizMode = "practice"; // "practice" | "exam" | "standard-exam"
+  let examPlayerName = "";
+
+  function isExamMode() { return quizMode === "exam" || quizMode === "standard-exam"; }
+  function isStandardExam() { return quizMode === "standard-exam"; }
 
   // ---------- DOM ----------
   const $ = (sel) => document.querySelector(sel);
@@ -87,15 +101,47 @@
         quizMode = btn.dataset.mode;
         const practiceOpts = $("#practice-options");
         const examHint = $("#exam-mode-hint");
-        if (quizMode === "exam") {
+        const nameSection = $("#exam-name-section");
+        const specSection = $("#specialty-list").closest(".filter-section");
+        const typeSection = $$('[data-type]')[0].closest(".filter-section");
+
+        if (quizMode === "standard-exam") {
+          // 標準考試模式：強制全科、顯示姓名輸入
           practiceOpts.classList.add("hidden");
+          examHint.textContent = "標準考試模式：全科隨機抽 100 題（80 單選 + 20 複選），含倒扣計分，成績計入排行榜";
           examHint.classList.remove("hidden");
+          nameSection.classList.remove("hidden");
+          specSection.classList.add("hidden");
+          typeSection.classList.add("hidden");
+          const allSpecs = [...new Set(allQuestions.map((q) => q.specialty))];
+          allSpecs.forEach((s) => selectedSpecs.add(s));
+          updateSpecChips();
+          selectedType = "all";
+          $$('[data-type]').forEach((b) => b.classList.remove("active"));
+          $$('[data-type]')[0].classList.add("active");
+        } else if (quizMode === "exam") {
+          // 一般考試模式：可自選科別，不計入排行榜
+          practiceOpts.classList.add("hidden");
+          examHint.textContent = "考試模式：自選科別隨機抽 100 題（80 單選 + 20 複選），含倒扣計分，不計入排行榜";
+          examHint.classList.remove("hidden");
+          nameSection.classList.add("hidden");
+          specSection.classList.remove("hidden");
+          typeSection.classList.remove("hidden");
         } else {
+          // 練習模式
           practiceOpts.classList.remove("hidden");
           examHint.classList.add("hidden");
+          nameSection.classList.add("hidden");
+          specSection.classList.remove("hidden");
+          typeSection.classList.remove("hidden");
         }
         updateStartInfo();
       });
+    });
+
+    // 姓名輸入即時驗證
+    $("#exam-player-name").addEventListener("input", () => {
+      updateStartInfo();
     });
 
     // 題型 chips
@@ -157,8 +203,8 @@
       return;
     }
 
-    if (quizMode === "exam") {
-      // 考試模式：計算可用的單選/複選數量
+    if (isExamMode()) {
+      // 考試模式（一般 / 標準）：計算可用的單選/複選數量
       const singles = filtered.filter((q) => q.question_type === "單選題");
       const multiples = filtered.filter((q) => q.question_type === "複選題");
       const targetSingle = 80, targetMultiple = 20;
@@ -166,7 +212,9 @@
       const actualMultiple = Math.min(targetMultiple, multiples.length);
       const total = actualSingle + actualMultiple;
 
-      let msg = `已選 ${selectedSpecs.size} 科｜考試模式：`;
+      let msg = isStandardExam()
+        ? `標準考試模式（全科）：`
+        : `考試模式（已選 ${selectedSpecs.size} 科）：`;
       if (singles.length < targetSingle || multiples.length < targetMultiple) {
         const warnings = [];
         if (singles.length < targetSingle) warnings.push(`單選題不足（需 ${targetSingle}，僅 ${singles.length}）`);
@@ -175,8 +223,34 @@
       } else {
         msg += `${actualSingle} 單選 + ${actualMultiple} 複選 = ${total} 題`;
       }
+
+      // 標準考試模式：驗證姓名
+      if (isStandardExam()) {
+        const nameInput = $("#exam-player-name");
+        const nameErr = $("#name-error");
+        const name = nameInput.value.trim();
+        if (!name) {
+          nameErr.textContent = "";
+          nameErr.classList.add("hidden");
+          btn.disabled = true;
+          msg += "　｜請輸入考生姓名";
+        } else if (!/^[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9\s]+$/.test(name)) {
+          nameErr.textContent = "姓名僅限中文、英文、數字";
+          nameErr.classList.remove("hidden");
+          btn.disabled = true;
+        } else if (name.length > 20) {
+          nameErr.textContent = "姓名最多 20 字";
+          nameErr.classList.remove("hidden");
+          btn.disabled = true;
+        } else {
+          nameErr.textContent = "";
+          nameErr.classList.add("hidden");
+          btn.disabled = total === 0;
+        }
+      } else {
+        btn.disabled = total === 0;
+      }
       info.textContent = msg;
-      btn.disabled = total === 0;
     } else {
       let limit = parseInt(slider.value);
       const available = filtered.length;
@@ -207,7 +281,10 @@
     userAnswers = [];
     totalScore = 0;
 
-    if (quizMode === "exam") {
+    if (isExamMode()) {
+      if (isStandardExam()) {
+        examPlayerName = $("#exam-player-name").value.trim();
+      }
       quizQuestions = selectExamQuestions(filtered);
     } else {
       const limit = parseInt($("#question-limit").value);
@@ -295,7 +372,7 @@
     const submitBtn = $("#submit-btn");
     const nextBtn = $("#next-btn");
     submitBtn.classList.remove("hidden");
-    if (quizMode === "exam") {
+    if (isExamMode()) {
       submitBtn.disabled = false;
       submitBtn.textContent = "提交並下一題";
     } else {
@@ -319,14 +396,14 @@
       $$(".option-btn").forEach((b) => b.classList.remove("selected"));
     }
     btn.classList.toggle("selected");
-    if (quizMode !== "exam") {
+    if (!isExamMode()) {
       $("#submit-btn").disabled = $$(".option-btn.selected").length === 0;
     }
   }
 
   // ---------- 計分輔助 ----------
   function calcQuestionScore(q, selectedLabels, correctLabels) {
-    const perQ = quizMode === "exam" ? 1 : 100 / quizQuestions.length;
+    const perQ = isExamMode() ? 1 : 100 / quizQuestions.length;
     const isMultiple = q.question_type === "複選題";
 
     if (selectedLabels.length === 0) return { score: 0, k: isMultiple ? 5 : null };
@@ -336,7 +413,7 @@
       const isCorrect =
         selectedLabels.length === correctLabels.length &&
         selectedLabels.every((l, i) => l === correctLabels[i]);
-      if (quizMode === "exam") {
+      if (isExamMode()) {
         return { score: isCorrect ? perQ : -0.5, k: null };
       }
       return { score: isCorrect ? perQ : 0, k: null };
@@ -384,7 +461,7 @@
     });
 
     // 考試模式：不顯示回饋，直接跳下一題
-    if (quizMode === "exam") {
+    if (isExamMode()) {
       if (currentIndex >= quizQuestions.length - 1) {
         showResults();
       } else {
@@ -443,12 +520,12 @@
     resultScreen.classList.remove("hidden");
 
     const finalScore = Math.round(totalScore * 100) / 100;
-    const perQ = quizMode === "exam" ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
+    const perQ = isExamMode() ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
 
     $("#final-score").textContent = finalScore.toFixed(2);
 
     const examStatsDiv = $("#exam-stats");
-    if (quizMode === "exam") {
+    if (isExamMode()) {
       // 考試模式統計
       const unansweredCount = userAnswers.filter((a) => a.unanswered).length;
       const wrongCount = userAnswers.filter((a) => !a.isCorrect && !a.unanswered).length;
@@ -464,7 +541,8 @@
       const mWrong = multiAnswers.filter((a) => !a.isCorrect && !a.unanswered).length;
       const mUnanswered = multiAnswers.filter((a) => a.unanswered).length;
 
-      $("#result-summary").textContent = `考試模式｜共 ${quizQuestions.length} 題（${singleAnswers.length} 單選 + ${multiAnswers.length} 複選）｜總分 ${finalScore.toFixed(2)} / 100`;
+      const modeLabel = isStandardExam() ? "標準考試模式" : "考試模式";
+      $("#result-summary").textContent = `${modeLabel}｜共 ${quizQuestions.length} 題（${singleAnswers.length} 單選 + ${multiAnswers.length} 複選）｜總分 ${finalScore.toFixed(2)} / 100`;
 
       examStatsDiv.classList.remove("hidden");
       const grid = examStatsDiv.querySelector(".exam-stats-grid");
@@ -506,6 +584,15 @@
     // Per-question score table
     renderScoreTable();
 
+    // Leaderboard (standard exam mode only)
+    const lbSection = $("#leaderboard-section");
+    if (isStandardExam()) {
+      lbSection.classList.remove("hidden");
+      submitScoreToSupabase(finalScore).then(() => fetchLeaderboard());
+    } else {
+      lbSection.classList.add("hidden");
+    }
+
     // Review
     const reviewBtn = $("#review-btn");
     const reviewSection = $("#review-section");
@@ -529,7 +616,7 @@
     if (!container) return;
     container.innerHTML = "";
 
-    const perQ = quizMode === "exam" ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
+    const perQ = isExamMode() ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
 
     let html = `<table class="score-table"><thead><tr>
       <th>#</th><th>科別</th><th>題型</th><th>滿分</th><th>得分</th>
@@ -700,6 +787,89 @@ ${hasImage ? "【備註】本題含有附圖，請依題目文字描述進行解
       btn.textContent = "重試 AI 詳解";
       // 允許重試：不標記為 loaded
       contentDiv.dataset.loaded = "";
+    }
+  }
+
+  // ---------- Supabase：成績寫入 ----------
+  async function submitScoreToSupabase(finalScore) {
+    const statusDiv = $("#leaderboard-status");
+    if (!supabase) {
+      statusDiv.innerHTML = `<p class="info-text" style="color:#b45309;">排行榜功能尚未啟用。請在 script.js 中填入 Supabase URL 和 anon key。</p>`;
+      return;
+    }
+
+    const singleAnswers = userAnswers.filter((a) => a.question.question_type === "單選題");
+    const multiAnswers = userAnswers.filter((a) => a.question.question_type === "複選題");
+
+    const record = {
+      player_name: examPlayerName,
+      score: Math.round(finalScore * 100) / 100,
+      submitted_at: new Date().toISOString(),
+      single_correct_count: singleAnswers.filter((a) => a.isCorrect).length,
+      multiple_correct_count: multiAnswers.filter((a) => a.isCorrect).length,
+      unanswered_count: userAnswers.filter((a) => a.unanswered).length,
+      total_questions: quizQuestions.length,
+      mode: "exam",
+    };
+
+    try {
+      const { error } = await supabase.from("leaderboard").insert([record]);
+      if (error) throw error;
+      statusDiv.innerHTML = `<p class="info-text" style="color:var(--success);">成績已提交至排行榜</p>`;
+    } catch (err) {
+      console.error("Supabase insert error:", err);
+      statusDiv.innerHTML = `<p class="info-text" style="color:#dc2626;">成績提交失敗：${escapeHtml(err.message || "未知錯誤")}。你的考試成績仍可在本頁查看。</p>`;
+    }
+  }
+
+  // ---------- Supabase：排行榜讀取 ----------
+  async function fetchLeaderboard() {
+    const container = $("#leaderboard-container");
+    if (!supabase) {
+      container.innerHTML = "";
+      return;
+    }
+
+    container.innerHTML = `<p class="info-text">載入排行榜中…</p>`;
+
+    try {
+      const { data, error } = await supabase
+        .from("leaderboard")
+        .select("player_name, score, submitted_at")
+        .eq("mode", "exam")
+        .order("score", { ascending: false })
+        .order("submitted_at", { ascending: true })
+        .limit(10);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `<p class="info-text">尚無排行榜資料</p>`;
+        return;
+      }
+
+      let html = `<table class="leaderboard-table"><thead><tr>
+        <th>名次</th><th>姓名</th><th>分數</th><th>提交時間</th>
+      </tr></thead><tbody>`;
+
+      data.forEach((row, i) => {
+        const time = new Date(row.submitted_at);
+        const timeStr = time.toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const rankIcon = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`;
+        const isMe = row.player_name === examPlayerName;
+        html += `<tr class="${isMe ? "lb-me" : ""}">
+          <td>${rankIcon}</td>
+          <td>${escapeHtml(row.player_name)}</td>
+          <td>${row.score.toFixed(2)}</td>
+          <td>${timeStr}</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    } catch (err) {
+      console.error("Supabase fetch error:", err);
+      container.innerHTML = `<p class="info-text" style="color:#dc2626;">排行榜載入失敗：${escapeHtml(err.message || "未知錯誤")}</p>`;
     }
   }
 
