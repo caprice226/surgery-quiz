@@ -28,17 +28,28 @@
       </div>
 
       <div class="filter-section">
-        <label>題數上限</label>
-        <div class="range-row">
-          <input type="range" id="question-limit" min="5" max="250" value="25" step="5">
-          <span id="limit-display">25</span> 題
+        <label>模式</label>
+        <div class="chip-group">
+          <button class="chip active" data-mode="practice" id="mode-practice">練習模式</button>
+          <button class="chip" data-mode="exam" id="mode-exam">考試模式</button>
         </div>
+        <p id="exam-mode-hint" class="info-text hidden" style="margin-top:6px;color:#b45309;">考試模式：隨機抽 100 題（80 單選 + 20 複選），含倒扣計分</p>
       </div>
 
-      <div class="filter-section">
-        <label>
-          <input type="checkbox" id="shuffle-toggle" checked> 隨機排序
-        </label>
+      <div id="practice-options">
+        <div class="filter-section">
+          <label>題數上限</label>
+          <div class="range-row">
+            <input type="range" id="question-limit" min="5" max="250" value="25" step="5">
+            <span id="limit-display">25</span> 題
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <label>
+            <input type="checkbox" id="shuffle-toggle" checked> 隨機排序
+          </label>
+        </div>
       </div>
 
       <button id="start-btn" class="btn-primary" disabled>開始作答</button>
@@ -87,6 +98,10 @@
         <span id="final-score">0%</span>
       </div>
       <p id="result-summary"></p>
+
+      <div id="exam-stats" class="hidden">
+        <div class="exam-stats-grid"></div>
+      </div>
 
       <div id="result-details" class="result-details"></div>
 

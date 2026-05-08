@@ -23,6 +23,7 @@
   // 篩選狀態
   let selectedSpecs = new Set();
   let selectedType = "all";
+  let quizMode = "practice"; // "practice" | "exam"
 
   // ---------- DOM ----------
   const $ = (sel) => document.querySelector(sel);
@@ -76,6 +77,25 @@
         updateStartInfo();
       });
       specList.appendChild(btn);
+    });
+
+    // 模式切換
+    $$('[data-mode]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        $$('[data-mode]').forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        quizMode = btn.dataset.mode;
+        const practiceOpts = $("#practice-options");
+        const examHint = $("#exam-mode-hint");
+        if (quizMode === "exam") {
+          practiceOpts.classList.add("hidden");
+          examHint.classList.remove("hidden");
+        } else {
+          practiceOpts.classList.remove("hidden");
+          examHint.classList.add("hidden");
+        }
+        updateStartInfo();
+      });
     });
 
     // 題型 chips
@@ -134,6 +154,29 @@
     if (selectedSpecs.size === 0) {
       info.textContent = "請至少選擇一個科別";
       btn.disabled = true;
+      return;
+    }
+
+    if (quizMode === "exam") {
+      // 考試模式：計算可用的單選/複選數量
+      const singles = filtered.filter((q) => q.question_type === "單選題");
+      const multiples = filtered.filter((q) => q.question_type === "複選題");
+      const targetSingle = 80, targetMultiple = 20;
+      const actualSingle = Math.min(targetSingle, singles.length);
+      const actualMultiple = Math.min(targetMultiple, multiples.length);
+      const total = actualSingle + actualMultiple;
+
+      let msg = `已選 ${selectedSpecs.size} 科｜考試模式：`;
+      if (singles.length < targetSingle || multiples.length < targetMultiple) {
+        const warnings = [];
+        if (singles.length < targetSingle) warnings.push(`單選題不足（需 ${targetSingle}，僅 ${singles.length}）`);
+        if (multiples.length < targetMultiple) warnings.push(`複選題不足（需 ${targetMultiple}，僅 ${multiples.length}）`);
+        msg += `${warnings.join("、")}，將自動調整為 ${actualSingle} 單選 + ${actualMultiple} 複選 = ${total} 題`;
+      } else {
+        msg += `${actualSingle} 單選 + ${actualMultiple} 複選 = ${total} 題`;
+      }
+      info.textContent = msg;
+      btn.disabled = total === 0;
     } else {
       let limit = parseInt(slider.value);
       const available = filtered.length;
@@ -158,22 +201,35 @@
   // ---------- 開始測驗 ----------
   function startQuiz() {
     let filtered = getFilteredQuestions();
-    const limit = parseInt($("#question-limit").value);
-    const shuffle = $("#shuffle-toggle").checked;
-
-    if (shuffle) filtered = shuffleArray([...filtered]);
-    quizQuestions = filtered.slice(0, limit);
     currentIndex = 0;
     correctCount = 0;
     answeredCount = 0;
     userAnswers = [];
     totalScore = 0;
 
+    if (quizMode === "exam") {
+      quizQuestions = selectExamQuestions(filtered);
+    } else {
+      const limit = parseInt($("#question-limit").value);
+      const shuffle = $("#shuffle-toggle").checked;
+      if (shuffle) filtered = shuffleArray([...filtered]);
+      quizQuestions = filtered.slice(0, limit);
+    }
+
     startScreen.classList.add("hidden");
     quizScreen.classList.remove("hidden");
     resultScreen.classList.add("hidden");
 
     renderQuestion();
+  }
+
+  // ---------- 考試模式抽題 ----------
+  function selectExamQuestions(filtered) {
+    const singles = shuffleArray(filtered.filter((q) => q.question_type === "單選題"));
+    const multiples = shuffleArray(filtered.filter((q) => q.question_type === "複選題"));
+    const pickedSingles = singles.slice(0, Math.min(80, singles.length));
+    const pickedMultiples = multiples.slice(0, Math.min(20, multiples.length));
+    return shuffleArray([...pickedSingles, ...pickedMultiples]);
   }
 
   // ---------- 顯示題目 ----------
@@ -239,7 +295,13 @@
     const submitBtn = $("#submit-btn");
     const nextBtn = $("#next-btn");
     submitBtn.classList.remove("hidden");
-    submitBtn.disabled = true;
+    if (quizMode === "exam") {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "提交並下一題";
+    } else {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "確認答案";
+    }
     submitBtn.onclick = () => submitAnswer(q);
     nextBtn.classList.add("hidden");
 
@@ -257,12 +319,14 @@
       $$(".option-btn").forEach((b) => b.classList.remove("selected"));
     }
     btn.classList.toggle("selected");
-    $("#submit-btn").disabled = $$(".option-btn.selected").length === 0;
+    if (quizMode !== "exam") {
+      $("#submit-btn").disabled = $$(".option-btn.selected").length === 0;
+    }
   }
 
   // ---------- 計分輔助 ----------
   function calcQuestionScore(q, selectedLabels, correctLabels) {
-    const perQ = 100 / quizQuestions.length;
+    const perQ = quizMode === "exam" ? 1 : 100 / quizQuestions.length;
     const isMultiple = q.question_type === "複選題";
 
     if (selectedLabels.length === 0) return { score: 0, k: isMultiple ? 5 : null };
@@ -272,6 +336,9 @@
       const isCorrect =
         selectedLabels.length === correctLabels.length &&
         selectedLabels.every((l, i) => l === correctLabels[i]);
+      if (quizMode === "exam") {
+        return { score: isCorrect ? perQ : -0.5, k: null };
+      }
       return { score: isCorrect ? perQ : 0, k: null };
     }
 
@@ -297,6 +364,7 @@
     const isCorrect =
       selectedLabels.length === correctLabels.length &&
       selectedLabels.every((l, i) => l === correctLabels[i]);
+    const isUnanswered = selectedLabels.length === 0;
 
     const { score, k } = calcQuestionScore(q, selectedLabels, correctLabels);
     const roundedScore = Math.round(score * 100) / 100;
@@ -312,9 +380,21 @@
       isCorrect,
       score: roundedScore,
       k,
+      unanswered: isUnanswered,
     });
 
-    // Lock & highlight
+    // 考試模式：不顯示回饋，直接跳下一題
+    if (quizMode === "exam") {
+      if (currentIndex >= quizQuestions.length - 1) {
+        showResults();
+      } else {
+        currentIndex++;
+        renderQuestion();
+      }
+      return;
+    }
+
+    // 練習模式：Lock & highlight
     $$(".option-btn").forEach((btn) => {
       btn.classList.add("locked");
       const label = btn.dataset.label;
@@ -363,10 +443,42 @@
     resultScreen.classList.remove("hidden");
 
     const finalScore = Math.round(totalScore * 100) / 100;
-    const perQ = Math.round((100 / quizQuestions.length) * 100) / 100;
+    const perQ = quizMode === "exam" ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
 
     $("#final-score").textContent = finalScore.toFixed(2);
-    $("#result-summary").textContent = `共 ${answeredCount} 題｜每題滿分 ${perQ.toFixed(2)} 分｜總分 ${finalScore.toFixed(2)} / 100`;
+
+    const examStatsDiv = $("#exam-stats");
+    if (quizMode === "exam") {
+      // 考試模式統計
+      const unansweredCount = userAnswers.filter((a) => a.unanswered).length;
+      const wrongCount = userAnswers.filter((a) => !a.isCorrect && !a.unanswered).length;
+
+      const singleAnswers = userAnswers.filter((a) => a.question.question_type === "單選題");
+      const multiAnswers = userAnswers.filter((a) => a.question.question_type === "複選題");
+
+      const sCorrect = singleAnswers.filter((a) => a.isCorrect).length;
+      const sWrong = singleAnswers.filter((a) => !a.isCorrect && !a.unanswered).length;
+      const sUnanswered = singleAnswers.filter((a) => a.unanswered).length;
+
+      const mCorrect = multiAnswers.filter((a) => a.isCorrect).length;
+      const mWrong = multiAnswers.filter((a) => !a.isCorrect && !a.unanswered).length;
+      const mUnanswered = multiAnswers.filter((a) => a.unanswered).length;
+
+      $("#result-summary").textContent = `考試模式｜共 ${quizQuestions.length} 題（${singleAnswers.length} 單選 + ${multiAnswers.length} 複選）｜總分 ${finalScore.toFixed(2)} / 100`;
+
+      examStatsDiv.classList.remove("hidden");
+      const grid = examStatsDiv.querySelector(".exam-stats-grid");
+      grid.innerHTML = `
+        <div class="stat-box"><div class="stat-num" style="color:var(--success);">${correctCount}</div><div class="stat-label">答對</div></div>
+        <div class="stat-box"><div class="stat-num" style="color:var(--danger);">${wrongCount}</div><div class="stat-label">答錯</div></div>
+        <div class="stat-box"><div class="stat-num" style="color:var(--text-light);">${unansweredCount}</div><div class="stat-label">未作答</div></div>
+        <div class="stat-box"><div class="stat-num">${sCorrect}<span class="stat-sub">/${singleAnswers.length}</span></div><div class="stat-label">單選正確<br><small>錯 ${sWrong}｜未答 ${sUnanswered}</small></div></div>
+        <div class="stat-box"><div class="stat-num">${mCorrect}<span class="stat-sub">/${multiAnswers.length}</span></div><div class="stat-label">複選正確<br><small>錯 ${mWrong}｜未答 ${mUnanswered}</small></div></div>
+      `;
+    } else {
+      examStatsDiv.classList.add("hidden");
+      $("#result-summary").textContent = `共 ${answeredCount} 題｜每題滿分 ${perQ.toFixed(2)} 分｜總分 ${finalScore.toFixed(2)} / 100`;
+    }
 
     // Stats by specialty
     const specStats = {};
@@ -417,7 +529,7 @@
     if (!container) return;
     container.innerHTML = "";
 
-    const perQ = Math.round((100 / quizQuestions.length) * 100) / 100;
+    const perQ = quizMode === "exam" ? 1 : Math.round((100 / quizQuestions.length) * 100) / 100;
 
     let html = `<table class="score-table"><thead><tr>
       <th>#</th><th>科別</th><th>題型</th><th>滿分</th><th>得分</th>
@@ -426,7 +538,7 @@
 
     userAnswers.forEach((a, i) => {
       const q = a.question;
-      const rowClass = a.isCorrect ? "" : "row-wrong";
+      const rowClass = a.unanswered ? "row-unanswered" : a.isCorrect ? "" : "row-wrong";
       const kDisplay = a.k !== null ? a.k : "—";
       html += `<tr class="${rowClass}">
         <td>${i + 1}</td>
@@ -449,7 +561,7 @@
     if (container.children.length > 0) return; // already rendered
     container.innerHTML = "";
 
-    const wrongOnes = userAnswers.filter((a) => !a.isCorrect);
+    const wrongOnes = userAnswers.filter((a) => !a.isCorrect || a.unanswered);
     if (wrongOnes.length === 0) {
       container.innerHTML = "<p>全部答對，沒有錯題！</p>";
       return;

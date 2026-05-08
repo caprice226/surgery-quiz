@@ -298,6 +298,26 @@ body {
 .score-table th { background: var(--bg); font-weight: 600; position: sticky; top: 0; }
 .score-table .row-wrong { background: #fff5f5; }
 
+/* ===== Exam Stats ===== */
+.exam-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.exam-stats-grid .stat-box {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 14px 8px;
+}
+.exam-stats-grid .stat-sub {
+  font-size: .85rem;
+  font-weight: 400;
+  color: var(--text-light);
+}
+.score-table .row-unanswered { background: #fefce8; }
+
 /* ===== Footer ===== */
 .site-footer {
   text-align: center;
